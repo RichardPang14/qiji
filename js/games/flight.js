@@ -476,25 +476,24 @@
     return true;
   };
 
-  /* ───────── 绘制 ───────── */
+  /* ───────── 绘制（对齐标准飞行棋盘的语言：色块说话，少用记号） ───────── */
+  var RW_FILL = [.12, .05, .20, .085];   // 四条归航跑道的灰阶（代色）
+
   Flight.prototype.draw = function (v) {
     var cell = this.cell, i, s, k, self = this;
 
-    /* 停机坪：四个角落，内含四个泊位环 */
+    /* 停机坪：细实线圆角框 + 四个泊位环 */
     for (s = 0; s < 4; s++) {
       var hr = HANGARS[s][0][0], hc = HANGARS[s][0][1];
-      var x = this.ox + (hc - 2 + .12) * cell, y = this.oy + (hr - 2 + .12) * cell;
-      v.rect(x, y, cell * 3.76, cell * 3.76, {
-        fill: P.wash, stroke: P.ink, w: 1.2, a: .55, r: cell * .3, dash: [5, 4]
-      });
-      v.text(this.seatName(s) + '停机坪', x + cell * 1.88, y + cell * .42, {
-        size: Math.max(7, cell * .30), color: P.ink3, alpha: .85,
+      var x = this.ox + (hc - 2 + .10) * cell, y = this.oy + (hr - 2 + .10) * cell;
+      v.rect(x, y, cell * 3.80, cell * 3.80, { stroke: P.ruleSoft, w: 1.1, r: cell * .34 });
+      v.text(this.seatName(s), x + cell * 1.90, y + cell * .40, {
+        size: Math.max(7, cell * .28), color: P.ink4,
         family: '"Kaiti SC","STKaiti","KaiTi",serif'
       });
       for (k = 0; k < 4; k++) {
         var bh = HANGARS[s][k];
-        v.circle(this.cx(bh[1]), this.cy(bh[0]), cell * .36,
-          { stroke: P.ruleSoft, w: 1, dash: [3, 3], a: .8 });
+        v.circle(this.cx(bh[1]), this.cy(bh[0]), cell * .36, { stroke: P.ruleFaint, w: 1 });
       }
     }
 
@@ -505,30 +504,16 @@
         { fill: P.paper2, stroke: P.ruleFaint, w: .7 });
     }
 
-    /* 归航跑道（按座号加不同底纹，黑白下也能分辨） */
+    /* 归航跑道：四档灰底 + 一条向内导向箭头 */
     for (s = 0; s < 4; s++) {
       for (k = 0; k < RUNWAYS[s].length; k++) {
         var rc = RUNWAYS[s][k];
         v.rect(this.ox + rc[1] * cell, this.oy + rc[0] * cell, cell, cell,
-          { fill: P.ink, fillA: s === 0 ? .10 : s === 1 ? .04 : s === 2 ? .16 : .07 });
-        if (s === 2 || s === 0) {
-          v.hatch(this.ox + rc[1] * cell, this.oy + rc[0] * cell, cell, cell, cell * .3,
-            { color: P.ruleSoft, w: .6, a: .3 });
-        }
+          { fill: P.ink, fillA: RW_FILL[s] });
       }
-      /* 跑道内的导向箭头 */
-      for (k = 0; k < RUNWAYS[s].length - 1; k++) {
-        var ra = RUNWAYS[s][k], rb = RUNWAYS[s][k + 1];
-        v.arrow(this.cx(ra[1]), this.cy(ra[0]), this.cx(rb[1]), this.cy(rb[0]),
-          { color: P.ink3, w: .9, a: .5, head: Math.max(4, cell * .15) });
-      }
-      /* 跑道内端 → 中心终点 */
-      var fc = RUNWAYS[s][RUNWAYS[s].length - 1];
-      var fdx = sgn(HUB[1] - fc[1]), fdy = sgn(HUB[0] - fc[0]);
-      this._seatMark(v, this.cx(fc[1]), this.cy(fc[0]), cell * .13, s, .9);
-      v.arrow(this.cx(fc[1]) + fdx * cell * .34, this.cy(fc[0]) + fdy * cell * .34,
-        this.cx(HUB[1]) - fdx * cell * .86, this.cy(HUB[0]) - fdy * cell * .86,
-        { color: P.ink, w: 1.3, a: .8, head: Math.max(5, cell * .18) });
+      var m0 = RUNWAYS[s][0], m1 = RUNWAYS[s][RUNWAYS[s].length - 1];
+      v.arrow(this.cx(m0[1]), this.cy(m0[0]), this.cx(m1[1]), this.cy(m1[0]),
+        { color: P.ink3, w: 1, a: .55, head: Math.max(4, cell * .16) });
     }
 
     /* 环形跑道：整格铺底成连续带 */
@@ -537,68 +522,73 @@
       v.rect(this.ox + t[1] * cell, this.oy + t[0] * cell, cell, cell,
         { fill: P.wash, stroke: P.ruleFaint, w: .7 });
     }
-    /* 行进方向箭头（顺时针） */
+    /* 行进方向：四个转向箭头（淡） */
     [7, 21, 35, 49].forEach(function (i2) {
       var a = TRACK[i2], b = TRACK[(i2 + 1) % LOOP];
       v.arrow(self.cx(a[1]), self.cy(a[0]), self.cx(b[1]), self.cy(b[0]),
-        { color: P.ink3, w: 1.1, a: .75, head: Math.max(5, cell * .20) });
+        { color: P.ink4, w: 1, a: .9, head: Math.max(4, cell * .16) });
     });
-    /* 四方起点：紧邻本机库，粗框 + 座徽，并以虚线箭头接向机库 */
+    /* 起飞点：粗框 + 座徽 */
     for (s = 0; s < 4; s++) {
       var stc = TRACK[START_IDX[s]];
-      v.rect(this.ox + stc[1] * cell + cell * .06, this.oy + stc[0] * cell + cell * .06,
-        cell * .88, cell * .88, { stroke: P.ink, w: 1.6 });
-      this._seatMark(v, this.cx(stc[1]), this.cy(stc[0]), cell * .21, s);
-      var hb = HANGARS[s], hx = 0, hy = 0;
-      for (k = 0; k < 4; k++) { hx += this.cx(hb[k][1]); hy += this.cy(hb[k][0]); }
-      hx /= 4; hy /= 4;
-      v.arrow(hx, hy, this.cx(stc[1]) - sgn(this.cx(stc[1]) - hx) * cell * .55,
-        this.cy(stc[0]) - sgn(this.cy(stc[0]) - hy) * cell * .55,
-        { color: P.ink3, w: 1.1, a: .7, dash: [4, 3], head: Math.max(5, cell * .18) });
+      v.rect(this.ox + stc[1] * cell + cell * .05, this.oy + stc[0] * cell + cell * .05,
+        cell * .90, cell * .90, { stroke: P.ink, w: 1.7 });
+      this._seatMark(v, this.cx(stc[1]), this.cy(stc[0]), cell * .20, s);
     }
 
-    /* 同色格角标：余数 0→蓝、2→黄绿、3→红 */
-    for (i = 0; i < TRACK.length; i++) {
-      var owners = TICK_OF[i % 4];
-      if (!owners) continue;
-      var tc2 = TRACK[i];
-      if (owners.length === 2) {
-        this._seatMark(v, this.ox + tc2[1] * cell + cell * .17, this.oy + tc2[0] * cell + cell * .17, cell * .078, owners[0], .62);
-        this._seatMark(v, this.ox + tc2[1] * cell + cell * .83, this.oy + tc2[0] * cell + cell * .83, cell * .078, owners[1], .62);
-      } else {
-        this._seatMark(v, this.ox + tc2[1] * cell + cell * .17, this.oy + tc2[0] * cell + cell * .17, cell * .078, owners[0], .62);
+    /* 航线：两条跨中心淡虚线，四个端点画小飞机图标（标准盘记号） */
+    [[0, 28], [14, 42]].forEach(function (ln) {
+      var a = TRACK[ln[0]], b = TRACK[ln[1]];
+      v.line(self.cx(a[1]), self.cy(a[0]), self.cx(b[1]), self.cy(b[0]),
+        { color: P.ink4, w: .9, a: .9, dash: [5, 4] });
+    });
+    for (s = 0; s < 4; s++) {
+      var fo = TRACK[LANES[s][0]];
+      this._drawPlane(v, this.cx(fo[1]), this.cy(fo[0]), s, -1, false, cell * .17);
+    }
+
+    /* 中心终点：四象限三角（尖朝中心）+ 座徽，骰子牌覆于正中 */
+    var hx0 = this.cx(HUB[1]), hy0 = this.cy(HUB[0]);
+    var QD = [[-1, 0], [0, -1], [1, 0], [0, 1]];      // 西/北/东/南 → 座 0/1/2/3
+    for (s = 0; s < 4; s++) {
+      var qdx = QD[s][0], qdy = QD[s][1], qpx = -qdy, qpy = qdx;
+      v.polygon([
+        [hx0, hy0],
+        [hx0 + qdx * cell * .98 + qpx * cell * .62, hy0 + qdy * cell * .98 + qpy * cell * .62],
+        [hx0 + qdx * cell * .98 - qpx * cell * .62, hy0 + qdy * cell * .98 - qpy * cell * .62]
+      ], { fill: 'rgba(20,22,26,' + (RW_FILL[s] + .05).toFixed(3) + ')', stroke: P.ink, w: 1 });
+      this._seatMark(v, hx0 + qdx * cell * .68, hy0 + qdy * cell * .68, cell * .115, s);
+    }
+    this._drawDie(v, hx0, hy0, cell * 1.02, this.dice);
+
+    /* 落点预览：走子阶段预告每架可动飞机连锁后的最终落点 */
+    if (this.phase === 'move' && !this._over) {
+      for (k = 0; k < this.movable.length; k++) {
+        var midx = this.pos[this.turn][this.movable[k]];
+        var raw = (midx === -1) ? 0 : this.destOf(midx, this.dice);
+        var ch = this.chainOf(this.turn, raw);
+        var lc = this.pathCell(this.turn, ch.to);
+        if (lc) {
+          v.circle(this.cx(lc[1]), this.cy(lc[0]), cell * .30,
+            { stroke: P.ink2, w: 1.1, a: .8, dash: [3, 3] });
+        }
+        if (ch.steps.length && lc) {
+          var rc0 = this.pathCell(this.turn, raw);
+          if (rc0) {
+            v.line(this.cx(rc0[1]), this.cy(rc0[0]), this.cx(lc[1]), this.cy(lc[0]),
+              { color: P.warn, w: 1, a: .45, dash: [3, 3] });
+          }
+        }
       }
     }
 
-    /* 跨中心航线：双向虚线 + 双箭头 */
-    LANES.forEach(function (ln) {
-      var a = TRACK[ln[0]], b = TRACK[ln[1]];
-      var x1 = self.cx(a[1]), y1 = self.cy(a[0]), x2 = self.cx(b[1]), y2 = self.cy(b[0]);
-      v.line(x1 + (x2 - x1) * .20, y1 + (y2 - y1) * .20, x1 + (x2 - x1) * .80, y1 + (y2 - y1) * .80,
-        { color: P.ink3, w: 1, a: .5, dash: [6, 4] });
-      v.arrow(x1 + (x2 - x1) * .20, y1 + (y2 - y1) * .20, x1 + (x2 - x1) * .07, y1 + (y2 - y1) * .07,
-        { color: P.ink3, w: 1, a: .5, head: Math.max(5, cell * .18) });
-      v.arrow(x1 + (x2 - x1) * .80, y1 + (y2 - y1) * .80, x1 + (x2 - x1) * .93, y1 + (y2 - y1) * .93,
-        { color: P.ink3, w: 1, a: .5, head: Math.max(5, cell * .18) });
-    });
-
-    /* 中心：终点徽记 + 当前骰子 */
-    v.circle(this.cx(HUB[1]), this.cy(HUB[0]), cell * .84, { stroke: P.ink, w: 1.5 });
-    this._drawDie(v, this.cx(HUB[1]), this.cy(HUB[0]), cell * 1.28, this.dice);
-
-    /* 上一手轨迹：含跳/飞的中继点 */
+    /* 上一手轨迹：一条淡虚线箭头 */
     if (this.lastMove && this.lastMove.from >= 0) {
-      var pts = [this.lastMove.from], ci2;
-      var chn = this.lastMove.chain || [];
-      for (ci2 = 0; ci2 < chn.length; ci2++) pts.push(chn[ci2].to);
-      if (!chn.length) pts.push(this.lastMove.to);
-      for (ci2 = 0; ci2 < pts.length - 1; ci2++) {
-        var pa = this.pathCell(this.lastMove.s, pts[ci2]);
-        var pb = this.pathCell(this.lastMove.s, pts[ci2 + 1]);
-        if (pa && pb) {
-          v.arrow(this.cx(pa[1]), this.cy(pa[0]), this.cx(pb[1]), this.cy(pb[0]),
-            { color: ci2 >= 1 ? P.warn : P.ink, w: 1.2, a: .35, dash: [4, 4], head: Math.max(6, cell * .22) });
-        }
+      var la = this.pathCell(this.lastMove.s, this.lastMove.from);
+      var lb = this.pathCell(this.lastMove.s, this.lastMove.to);
+      if (la && lb) {
+        v.arrow(this.cx(la[1]), this.cy(la[0]), this.cx(lb[1]), this.cy(lb[0]),
+          { color: P.ink3, w: 1.1, a: .5, dash: [4, 4], head: Math.max(5, cell * .18) });
       }
     }
 
@@ -644,10 +634,7 @@
     }
   };
 
-  /* 环道余数 → 视该格为同色格的座位（由 START_IDX 推得：余 0→红蓝，余 2→黄绿） */
-  var TICK_OF = { 0: [0, 2], 2: [1, 3] };
-
-  /* 四种纯黑白可辨识的座徽；alpha 用于淡化同色格角标 */
+  /* 四种纯黑白可辨识的座徽；alpha 用于淡化 */
   Flight.prototype._seatMark = function (v, x, y, r, seat, alpha) {
     var style = seat % 4, a = alpha == null ? 1 : alpha;
     if (style === 0) v.circle(x, y, r, { fill: P.ink, stroke: P.ink, w: 1, a: a, fillA: a });
@@ -795,7 +782,7 @@
         },
         {
           title: '跳子与飞子', items: [
-            '沿本方路径<b>每 4 格为一个同色格</b>，盘面上以本方小座徽标出（一格至多两家共享）。',
+            '沿本方路径<b>每 4 格为一个同色格</b>；黑白盘面不逐格标色，<b>走子阶段的落点预览环</b>会直接告诉你跳/飞后停在哪。',
             '<b>跳</b>：走子后落在本方同色格，立即向前<b>跳 4 格</b>到下一个同色格（起飞落起点格不跳）。',
             '<b>飞</b>：跳后若落在<b>航线起点</b>（跨中心虚线的端点），则<b>跨中心直飞</b>到对面同色格；飞后不再跳。',
             '跳与飞<b>只结算最终落点</b>：中途掠过的格子上的敌机不受影响，最终落点上的敌机照常被击落。',
@@ -825,12 +812,11 @@
         },
         {
           title: '盘面记号', items: [
-            '<b>粗框格</b>为四方起飞点，紧贴各自机库，虚线箭头由机库指向起飞点。',
-            '跑道格对角上的<b>淡色小座徽</b>表示该格是哪家的同色格；<b>跨中心的双向虚线箭头</b>即各家航线。',
-            '归航跑道自臂端口部向内延伸，内端座徽旁的箭头指向<b>中心终点</b>（四方共用）。',
-            '四个虚线大框为停机坪，内含四个泊位环，飞机起飞后留下空环。',
+            '<b>粗框格</b>为四方起飞点，紧贴各自机库，框内为本方座徽。',
+            '中心为<b>四象限终点区</b>（尖朝中心，各带座徽）；<b>跨中心淡虚线</b>即航线，端点印有本方小飞机图标。',
+            '四个细线圆角框为停机坪，内含四个泊位环，飞机起飞后留下空环。',
             '正中央画出<b>当前骰子点数</b>，未掷时显示「骰」字。',
-            '可动的飞机外套<b>红色虚线圈</b>；虚线箭头为上一手轨迹，其中<b>红色一段</b>表示飞越。',
+            '走子阶段可动飞机外套<b>红色虚线圈</b>，其<b>跳/飞后的最终落点</b>以虚线环预告；淡虚线箭头为上一手轨迹。',
             '同格多架飞机会缩小平铺摆放，便于数清。'
           ]
         }
