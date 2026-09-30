@@ -625,7 +625,7 @@
     id: 'go',
     name: '围棋',
     en: 'WEIQI',
-    sub: '气尽提子，围地多者胜',
+    sub: '黑白对弈，围地多者胜',
     tag: '围棋',
     aspect: 1,
     players: 2,

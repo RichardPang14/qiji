@@ -13,7 +13,7 @@
 
   /* 尚未实现的棋种，先在大厅占位；id 与正式注册名一致，一旦实现会自动从这里消失 */
   var UPCOMING = [
-    { id: 'flight', name: '飞行器', en: 'FLIGHT CHESS', sub: '掷骰竞速，四色机场，撞落对手回到起点。' },
+    { id: 'flight', name: '飞行棋', en: 'FLIGHT CHESS', sub: '掷骰绕行，同色跳飞，撞落对手回到起点。' },
     { id: 'monopoly', name: '大富翁', en: 'MONOPOLY', sub: '购地建房，机会命运，让对手破产收场。' }
   ];
 
