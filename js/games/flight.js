@@ -20,6 +20,9 @@
   var PATHLEN = FINISH + 1;    // = 62，每方路径长度
   var STEP = LOOP / 4;         // = 14，各方起点间隔
   var PLANES = 4;
+  var COLOR_STEP = 4;          // 同色格周期：沿本方路径每 4 格一色
+  var FLY_FROM = 12;           // 航线起点（本方路径序号）
+  var FLY_TO = 40;             // 航线终点：跨中心 +28
 
   var SEAT_NAME = ['红方', '黄方', '蓝方', '绿方'];
 
@@ -169,13 +172,30 @@
     return FINISH - (n - FINISH);
   };
 
+  /** 跳子与飞子：
+      落在本方同色格（路径序号为 4 的倍数）→ 向前跳 4 格；
+      跳后若落在航线起点（12）→ 跨中心直飞至 40；飞后不再跳。
+      跳/飞只结算最终落点的撞击，中途格不受影响。 */
+  Flight.prototype.chainOf = function (seat, to) {
+    var steps = [], p = to;
+    if (p >= 0 && p < LOOP && p % COLOR_STEP === 0 && p + COLOR_STEP < LOOP) {
+      p += COLOR_STEP;
+      steps.push({ k: 'jump', to: p });
+    }
+    if (p === FLY_FROM) {
+      p = FLY_TO;
+      steps.push({ k: 'fly', to: p });
+    }
+    return { to: p, steps: steps };
+  };
+
   /* ───────── 快照 / 悔棋 ───────── */
   Flight.prototype.snapshot = function () {
     return {
       pos: [this.pos[0].slice(), this.pos[1].slice(), this.pos[2].slice(), this.pos[3].slice()],
       turn: this.turn, dice: this.dice, phase: this.phase,
       sixes: this.sixes, msg: this.msg,
-      lastMove: this.lastMove ? { s: this.lastMove.s, p: this.lastMove.p, from: this.lastMove.from, to: this.lastMove.to, cap: this.lastMove.cap } : null
+      lastMove: this.lastMove ? { s: this.lastMove.s, p: this.lastMove.p, from: this.lastMove.from, to: this.lastMove.to, cap: this.lastMove.cap, chain: this.lastMove.chain } : null
     };
   };
   Flight.prototype.restore = function (s) {
@@ -244,6 +264,10 @@
     var d = this.dice, idx = this.pos[seat][p], from = idx, to, cap = 0, s2, q;
     if (idx === -1) to = 0;                                  // 起飞
     else to = this.destOf(idx, d);
+    /* 跳子 / 飞子连锁（起飞落起点格视作已结算，不跳） */
+    var ch = (from === -1) ? { to: to, steps: [] } : this.chainOf(seat, to);
+    var chain = ch.steps;
+    to = ch.to;
     this.pos[seat][p] = to;
 
     /* 撞击：同一跑道格上的其他方飞机被击回停机坪 */
@@ -257,10 +281,13 @@
       }
     }
 
-    this.lastMove = { s: seat, p: p, from: from, to: to, cap: cap };
+    this.lastMove = { s: seat, p: p, from: from, to: to, cap: cap, chain: chain };
     this.history[this.history.length - 1].rec =
-      { s: seat, p: p, from: from, to: to, cap: cap, d: d };
+      { s: seat, p: p, from: from, to: to, cap: cap, d: d, chain: chain };
+    var chainTxt = '';
+    for (var ci = 0; ci < chain.length; ci++) chainTxt += chain[ci].k === 'jump' ? '跳' : '飞';
     this.msg = this.seatName(seat) + ' ' + (from === -1 ? '起飞' : '前进 ' + d + ' 格') +
+      (chainTxt ? '，同色' + chainTxt + '！' : '') +
       (to === FINISH ? '，抵达终点！' : '') + (cap ? ' 击落 ' + cap + ' 架。' : '。');
 
     this.judge();
@@ -339,8 +366,8 @@
   Flight.prototype.hint = function () {
     if (this._over) return '';
     if (this.phase === 'roll') return '点右侧「掷骰子」。掷出 6 点方可让停机坪上的飞机起飞，且掷 6 点可追加一次。';
-    if (this.movable.length === 1) return '只有 ' + (this.sel + 1) + ' 号机可动，点击它即可（高亮处）。';
-    return '点击任一高亮的飞机移动 ' + this.dice + ' 格。落到对方飞机所在格会将其击回停机坪。';
+    if (this.movable.length === 1) return '只有 ' + (this.sel + 1) + ' 号机可动，点击它即可（高亮处）。落在带本方座徽的同色格可向前跳 4 格，跳到航线起点还能跨中心直飞。';
+    return '点击任一高亮的飞机移动 ' + this.dice + ' 格。落到对方飞机所在格会将其击回停机坪；落同色格可跳，跳入航线起点可飞。';
   };
 
   Flight.prototype.log = function () {
@@ -354,6 +381,7 @@
           ? (SEAT_NAME[m.s] + ' 掷 ' + m.d + ' 点，无子可动')
           : (SEAT_NAME[m.s] + ' ' + m.d + '点 ' + (m.p + 1) + '号机' +
             (m.from === -1 ? ' 起飞' : ' ' + m.from + '→' + m.to) +
+            ((m.chain && m.chain.length) ? ' ' + m.chain.map(function (c) { return c.k === 'jump' ? '跳' : '飞'; }).join('') : '') +
             (m.to === FINISH ? ' 抵终点' : '') + (m.cap ? ' 击落' + m.cap : '')),
         hi: k === this.history.length - 1
       });
@@ -514,16 +542,44 @@
       this._seatMark(v, this.cx(stc[1]), this.cy(stc[0]), cell * .21, s);
     }
 
+    /* 同色格角标：每格至多两家共享余数，小座徽标在对角 */
+    for (i = 0; i < TRACK.length; i++) {
+      if (i % STEP === 0) continue;                       // 起点已有大座徽
+      var r4 = i % 4, pair = r4 === 0 ? [0, 2] : (r4 === 2 ? [1, 3] : null);
+      if (!pair) continue;
+      var tc = TRACK[i];
+      this._seatMark(v, this.ox + tc[1] * cell + cell * .17, this.oy + tc[0] * cell + cell * .17, cell * .078, pair[0], .62);
+      this._seatMark(v, this.ox + tc[1] * cell + cell * .83, this.oy + tc[0] * cell + cell * .83, cell * .078, pair[1], .62);
+    }
+
+    /* 跨中心航线：跳至 12 后可直飞 40（双向虚线 + 双箭头） */
+    [[FLY_FROM, FLY_TO], [FLY_FROM + STEP, FLY_TO + STEP]].forEach(function (ln) {
+      var a = TRACK[ln[0] % LOOP], b = TRACK[ln[1] % LOOP];
+      var x1 = self.cx(a[1]), y1 = self.cy(a[0]), x2 = self.cx(b[1]), y2 = self.cy(b[0]);
+      v.line(x1 + (x2 - x1) * .20, y1 + (y2 - y1) * .20, x1 + (x2 - x1) * .80, y1 + (y2 - y1) * .80,
+        { color: P.ink3, w: 1, a: .5, dash: [6, 4] });
+      v.arrow(x1 + (x2 - x1) * .20, y1 + (y2 - y1) * .20, x1 + (x2 - x1) * .07, y1 + (y2 - y1) * .07,
+        { color: P.ink3, w: 1, a: .5, head: Math.max(5, cell * .18) });
+      v.arrow(x1 + (x2 - x1) * .80, y1 + (y2 - y1) * .80, x1 + (x2 - x1) * .93, y1 + (y2 - y1) * .93,
+        { color: P.ink3, w: 1, a: .5, head: Math.max(5, cell * .18) });
+    });
+
     /* 中心：画当前骰子 */
     this._drawDie(v, this.cx(HUB[1]), this.cy(HUB[0]), cell * 1.5, this.dice);
 
-    /* 上一手轨迹 */
+    /* 上一手轨迹：含跳/飞的中继点 */
     if (this.lastMove && this.lastMove.from >= 0) {
-      var a = this.pathCell(this.lastMove.s, this.lastMove.from);
-      var b2 = this.pathCell(this.lastMove.s, this.lastMove.to);
-      if (a && b2) {
-        v.arrow(this.cx(a[1]), this.cy(a[0]), this.cx(b2[1]), this.cy(b2[0]),
-          { color: P.ink, w: 1.2, a: .3, dash: [4, 4], head: Math.max(6, cell * .22) });
+      var pts = [this.lastMove.from], ci2;
+      var chn = this.lastMove.chain || [];
+      for (ci2 = 0; ci2 < chn.length; ci2++) pts.push(chn[ci2].to);
+      if (!chn.length) pts.push(this.lastMove.to);
+      for (ci2 = 0; ci2 < pts.length - 1; ci2++) {
+        var pa = this.pathCell(this.lastMove.s, pts[ci2]);
+        var pb = this.pathCell(this.lastMove.s, pts[ci2 + 1]);
+        if (pa && pb) {
+          v.arrow(this.cx(pa[1]), this.cy(pa[0]), this.cx(pb[1]), this.cy(pb[0]),
+            { color: ci2 >= 1 ? P.warn : P.ink, w: 1.2, a: .35, dash: [4, 4], head: Math.max(6, cell * .22) });
+        }
       }
     }
 
@@ -569,15 +625,15 @@
     }
   };
 
-  /** 四种纯黑白可辨识的座徽 */
-  Flight.prototype._seatMark = function (v, x, y, r, seat) {
-    var style = seat % 4;
-    if (style === 0) v.circle(x, y, r, { fill: P.ink, stroke: P.ink, w: 1 });
-    else if (style === 1) v.circle(x, y, r, { fill: P.paper, stroke: P.ink, w: 1.4 });
-    else if (style === 2) v.circle(x, y, r, { fill: P.ink3, stroke: P.ink, w: 1 });
+  /** 四种纯黑白可辨识的座徽；alpha 用于淡化同色格角标 */
+  Flight.prototype._seatMark = function (v, x, y, r, seat, alpha) {
+    var style = seat % 4, a = alpha == null ? 1 : alpha;
+    if (style === 0) v.circle(x, y, r, { fill: P.ink, stroke: P.ink, w: 1, a: a, fillA: a });
+    else if (style === 1) v.circle(x, y, r, { fill: P.paper, stroke: P.ink, w: 1.4, a: a });
+    else if (style === 2) v.circle(x, y, r, { fill: P.ink3, stroke: P.ink, w: 1, a: a, fillA: a });
     else {
-      v.circle(x, y, r, { fill: P.paper, stroke: P.ink, w: 1.4 });
-      v.circle(x, y, r * .45, { fill: P.ink });
+      v.circle(x, y, r, { fill: P.paper, stroke: P.ink, w: 1.4, a: a });
+      v.circle(x, y, r * .45, { fill: P.ink, fillA: a });
     }
   };
 
@@ -705,6 +761,15 @@
           ]
         },
         {
+          title: '跳子与飞子', items: [
+            '沿本方路径<b>每 4 格为一个同色格</b>，盘面上以本方小座徽标出（一格至多两家共享）。',
+            '<b>跳</b>：走子后落在本方同色格，立即向前<b>跳 4 格</b>到下一个同色格（起飞落起点格不跳）。',
+            '<b>飞</b>：跳后若落在<b>航线起点</b>（跨中心虚线的端点），则<b>跨中心直飞</b>到对面同色格，一下推进 28 格；飞后不再跳。',
+            '跳与飞<b>只结算最终落点</b>：中途掠过的格子上的敌机不受影响，最终落点上的敌机照常被击落。',
+            '已进入归航跑道或抵达终点后不再跳飞；跳会冲进归航段时也不跳。'
+          ]
+        },
+        {
           title: '终点与反弹', items: [
             '抵达终点<b>必须点数正好</b>。',
             '若点数超出，飞机走到终点后<b>按多余步数原路反弹回退</b>，下次再找机会。',
@@ -720,10 +785,11 @@
         },
         {
           title: '盘面记号', items: [
-            '十字盘上<b>粗框格</b>为四方起点，格内数字为座号；<b>加粗底纹的通道</b>为各方归航跑道，末端带数字的方框为终点。',
-            '四个虚线大框为停机坪，内含四个泊位。',
+            '十字盘上<b>粗框格</b>为四方起点，格内为本方座徽；<b>加粗底纹的通道</b>为各方归航跑道，末端插旗处为终点。',
+            '跑道格对角上的<b>小座徽</b>表示该格是哪两家的同色格；<b>跨中心的双向虚线箭头</b>即航线。',
+            '四个虚线大框为停机坪，内含四个泊位环，飞机起飞后留下空环。',
             '正中央画出<b>当前骰子点数</b>，未掷时显示「骰」字。',
-            '可动的飞机外套<b>红色虚线圈</b>；虚线箭头为上一手的移动轨迹。',
+            '可动的飞机外套<b>红色虚线圈</b>；虚线箭头为上一手轨迹，其中<b>红色一段</b>表示飞越。',
             '同格多架飞机会略微错开摆放，便于数清。'
           ]
         }
@@ -737,7 +803,8 @@
   Hub.FL = {
     GW: GW, LOOP: LOOP, RUNWAY_LEN: RUNWAY, FINISH: FINISH, PATHLEN: PATHLEN,
     STEP: STEP, PLANES: PLANES, TRACK: TRACK, RUNWAYS: RUNWAYS,
-    HANGARS: HANGARS, HUB: HUB, CROSS: CROSS, SEAT_NAME: SEAT_NAME
+    HANGARS: HANGARS, HUB: HUB, CROSS: CROSS, SEAT_NAME: SEAT_NAME,
+    COLOR_STEP: COLOR_STEP, FLY_FROM: FLY_FROM, FLY_TO: FLY_TO
   };
 
 })(window);

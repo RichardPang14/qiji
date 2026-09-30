@@ -18,14 +18,17 @@
   var W_PROGRESS = 1.1;     // 每推进一格
   var W_RISK = 26;          // 落点可能被对方下一手撞击
 
-  /** 评估「seat 方用 d 点移动第 p 架」的收益 */
+  /** 评估「seat 方用 d 点移动第 p 架」的收益（含跳/飞连锁后的实际落点） */
   Flight.prototype._scoreMove = function (seat, p, d) {
     var idx = this.pos[seat][p];
-    var to = (idx === -1) ? 0 : this.destOf(idx, d);
+    var raw = (idx === -1) ? 0 : this.destOf(idx, d);
+    var ch = this.chainOf(seat, raw);
+    var to = ch.to;
     var v = 0, s2, q;
 
     if (idx === -1) v += W_LAUNCH;
     v += to * W_PROGRESS;
+    if (ch.steps.length) v += 16 * ch.steps.length;      // 跳/飞白赚的推进
     if (to === FINISH) v += W_FINISH;
     else if (to >= LOOP) v += W_RUNWAY;
 
@@ -103,10 +106,14 @@
     var p = this._choose(level == null ? 3 : level);
     if (p == null) { Hub.App.toast('无可动飞机'); return null; }
     var idx = this.pos[this.turn][p];
-    var to = (idx === -1) ? 0 : this.destOf(idx, this.dice);
+    var raw = (idx === -1) ? 0 : this.destOf(idx, this.dice);
+    var ch = this.chainOf(this.turn, raw);
+    var to = ch.to;
+    var chainTxt = ch.steps.map(function (c) { return c.k === 'jump' ? '跳' : '飞'; }).join('');
     this.sugg = { p: p, to: to };
     Hub.App.toast('建议：' + (this.turn + 1) + ' 号方 ' + (p + 1) + ' 号机' +
       (idx === -1 ? ' 起飞' : '走 ' + this.dice + ' 格') +
+      (chainTxt ? '，同色' + chainTxt : '') +
       (to === FINISH ? '（抵达终点）' : '') +
       (typeof this._lastScore === 'number' ? '，评分 ' + Math.round(this._lastScore) : ''));
     return this.sugg;
