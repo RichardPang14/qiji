@@ -15,14 +15,18 @@
 
   var GW = 15;                 // 盘面边长（格）
   var LOOP = 56;               // 环形跑道格数
-  var RUNWAY = 5;              // 归航跑道格数（不含终点）
-  var FINISH = LOOP + RUNWAY;  // = 61，路径终点索引
-  var PATHLEN = FINISH + 1;    // = 62，每方路径长度
-  var STEP = LOOP / 4;         // = 14，各方起点间隔
+  var RUNWAY = 6;              // 归航跑道格数（口部向内，不含中心终点）
+  var FINISH = LOOP + RUNWAY;  // = 62，中心终点
+  var PATHLEN = FINISH + 1;    // = 63，每方路径长度
   var PLANES = 4;
   var COLOR_STEP = 4;          // 同色格周期：沿本方路径每 4 格一色
-  var FLY_FROM = 12;           // 航线起点（本方路径序号）
-  var FLY_TO = 40;             // 航线终点：跨中心 +28
+  /* 起飞点：紧邻本机库、顺时针入环的那一格；
+     绕环一周后正好回到本臂跑道口部外侧的肩格 */
+  var START_IDX = [44, 2, 16, 30];
+  /* 跨中心航线（环道索引对，两端关于中心 (7,7) 对称） */
+  var LANES = [[0, 28], [14, 42], [28, 0], [42, 14]];
+  /* 航线两端换算成本方路径序号 [起点, 终点]（四家均为 12 → 40） */
+  var FLY_PATH = [[12, 40], [12, 40], [12, 40], [12, 40]];
 
   var SEAT_NAME = ['红方', '黄方', '蓝方', '绿方'];
 
@@ -55,14 +59,14 @@
     return t;
   })();
 
-  /* 各方归航跑道（最后一格即中心终点），由上臂按 90° 旋转推得 */
+  /* 各方归航跑道：自跑道口部（臂端中格）向内直插中心 */
   var RUNWAYS = [
+    [[7, 1], [7, 2], [7, 3], [7, 4], [7, 5], [7, 6]],
     [[1, 7], [2, 7], [3, 7], [4, 7], [5, 7], [6, 7]],
     [[7, 13], [7, 12], [7, 11], [7, 10], [7, 9], [7, 8]],
-    [[13, 7], [12, 7], [11, 7], [10, 7], [9, 7], [8, 7]],
-    [[7, 1], [7, 2], [7, 3], [7, 4], [7, 5], [7, 6]]
+    [[13, 7], [12, 7], [11, 7], [10, 7], [9, 7], [8, 7]]
   ];
-  var HUB = [7, 7];                                  // 正中心（画骰子用）
+  var HUB = [7, 7];                                  // 正中心：四方共用终点
 
   /* 停机坪：四个 6×6 角落，各取靠内的 2×2 四个泊位 */
   var HANGARS = (function () {
@@ -139,12 +143,13 @@
   /* 路径索引 → 盘面格坐标 */
   Flight.prototype.pathCell = function (seat, idx) {
     if (idx < 0) return null;
-    if (idx < LOOP) return TRACK[(STEP * seat + idx) % LOOP];
-    return RUNWAYS[seat][idx - LOOP];
+    if (idx < LOOP) return TRACK[(START_IDX[seat] + idx) % LOOP];
+    if (idx < FINISH) return RUNWAYS[seat][idx - LOOP];
+    return HUB;
   };
   /* 路径索引 → 环形跑道绝对索引（归航段返回 -1，不受撞击） */
   Flight.prototype.loopIndex = function (seat, idx) {
-    return (idx >= 0 && idx < LOOP) ? (STEP * seat + idx) % LOOP : -1;
+    return (idx >= 0 && idx < LOOP) ? (START_IDX[seat] + idx) % LOOP : -1;
   };
   /* 飞机当前所在格（停机坪用泊位坐标） */
   Flight.prototype.planeCell = function (seat, p) {
@@ -177,14 +182,19 @@
       跳后若落在航线起点（12）→ 跨中心直飞至 40；飞后不再跳。
       跳/飞只结算最终落点的撞击，中途格不受影响。 */
   Flight.prototype.chainOf = function (seat, to) {
-    var steps = [], p = to;
+    var steps = [], p = to, fp = FLY_PATH[seat];
     if (p >= 0 && p < LOOP && p % COLOR_STEP === 0 && p + COLOR_STEP < LOOP) {
       p += COLOR_STEP;
       steps.push({ k: 'jump', to: p });
     }
-    if (p === FLY_FROM) {
-      p = FLY_TO;
+    if (p === fp[0]) {
+      p = fp[1];
       steps.push({ k: 'fly', to: p });
+      /* 村规「同色连续跳」：飞后若仍同色，可再跳一次 */
+      if (this.cfg.chainJump && p % COLOR_STEP === 0 && p + COLOR_STEP < LOOP) {
+        p += COLOR_STEP;
+        steps.push({ k: 'jump', to: p });
+      }
     }
     return { to: p, steps: steps };
   };
@@ -293,8 +303,10 @@
     this.judge();
     if (this._over) { this.phase = 'roll'; this.movable = []; return true; }
 
-    /* 掷 6 点追加一次；否则换下一家。骰面保留至下次掷骰 */
-    if (d === 6) {
+    /* 掷 6 点追加一次；村规「撞击追加一掷」；否则换下一家。骰面保留至下次掷骰 */
+    if (cap > 0 && this.cfg.capAgain) {
+      this.phase = 'roll'; this.movable = []; this.sel = -1;
+    } else if (d === 6) {
       this.phase = 'roll'; this.movable = []; this.sel = -1;
     } else {
       this.turn = (this.turn + 1) % 4;
@@ -510,16 +522,13 @@
         v.arrow(this.cx(ra[1]), this.cy(ra[0]), this.cx(rb[1]), this.cy(rb[0]),
           { color: P.ink3, w: .9, a: .5, head: Math.max(4, cell * .15) });
       }
-      /* 终点格：插旗 */
+      /* 跑道内端 → 中心终点 */
       var fc = RUNWAYS[s][RUNWAYS[s].length - 1];
-      var fx = this.cx(fc[1]), fy = this.cy(fc[0]);
-      v.line(fx - cell * .16, fy + cell * .30, fx - cell * .16, fy - cell * .30, { color: P.ink, w: 1.4 });
-      v.polygon([
-        [fx - cell * .16, fy - cell * .30], [fx + cell * .28, fy - cell * .16], [fx - cell * .16, fy - cell * .02]
-      ], { fill: P.ink });
-      v.text(String(s + 1), fx + cell * .14, fy + cell * .22, {
-        size: cell * .30, family: 'monospace', weight: 700, color: P.ink2
-      });
+      var fdx = sgn(HUB[1] - fc[1]), fdy = sgn(HUB[0] - fc[0]);
+      this._seatMark(v, this.cx(fc[1]), this.cy(fc[0]), cell * .13, s, .9);
+      v.arrow(this.cx(fc[1]) + fdx * cell * .34, this.cy(fc[0]) + fdy * cell * .34,
+        this.cx(HUB[1]) - fdx * cell * .86, this.cy(HUB[0]) - fdy * cell * .86,
+        { color: P.ink, w: 1.3, a: .8, head: Math.max(5, cell * .18) });
     }
 
     /* 环形跑道：整格铺底成连续带 */
@@ -534,27 +543,36 @@
       v.arrow(self.cx(a[1]), self.cy(a[0]), self.cx(b[1]), self.cy(b[0]),
         { color: P.ink3, w: 1.1, a: .75, head: Math.max(5, cell * .20) });
     });
-    /* 四方起点：粗框 + 座徽 */
+    /* 四方起点：紧邻本机库，粗框 + 座徽，并以虚线箭头接向机库 */
     for (s = 0; s < 4; s++) {
-      var stc = TRACK[STEP * s];
+      var stc = TRACK[START_IDX[s]];
       v.rect(this.ox + stc[1] * cell + cell * .06, this.oy + stc[0] * cell + cell * .06,
         cell * .88, cell * .88, { stroke: P.ink, w: 1.6 });
       this._seatMark(v, this.cx(stc[1]), this.cy(stc[0]), cell * .21, s);
+      var hb = HANGARS[s], hx = 0, hy = 0;
+      for (k = 0; k < 4; k++) { hx += this.cx(hb[k][1]); hy += this.cy(hb[k][0]); }
+      hx /= 4; hy /= 4;
+      v.arrow(hx, hy, this.cx(stc[1]) - sgn(this.cx(stc[1]) - hx) * cell * .55,
+        this.cy(stc[0]) - sgn(this.cy(stc[0]) - hy) * cell * .55,
+        { color: P.ink3, w: 1.1, a: .7, dash: [4, 3], head: Math.max(5, cell * .18) });
     }
 
-    /* 同色格角标：每格至多两家共享余数，小座徽标在对角 */
+    /* 同色格角标：余数 0→蓝、2→黄绿、3→红 */
     for (i = 0; i < TRACK.length; i++) {
-      if (i % STEP === 0) continue;                       // 起点已有大座徽
-      var r4 = i % 4, pair = r4 === 0 ? [0, 2] : (r4 === 2 ? [1, 3] : null);
-      if (!pair) continue;
-      var tc = TRACK[i];
-      this._seatMark(v, this.ox + tc[1] * cell + cell * .17, this.oy + tc[0] * cell + cell * .17, cell * .078, pair[0], .62);
-      this._seatMark(v, this.ox + tc[1] * cell + cell * .83, this.oy + tc[0] * cell + cell * .83, cell * .078, pair[1], .62);
+      var owners = TICK_OF[i % 4];
+      if (!owners) continue;
+      var tc2 = TRACK[i];
+      if (owners.length === 2) {
+        this._seatMark(v, this.ox + tc2[1] * cell + cell * .17, this.oy + tc2[0] * cell + cell * .17, cell * .078, owners[0], .62);
+        this._seatMark(v, this.ox + tc2[1] * cell + cell * .83, this.oy + tc2[0] * cell + cell * .83, cell * .078, owners[1], .62);
+      } else {
+        this._seatMark(v, this.ox + tc2[1] * cell + cell * .17, this.oy + tc2[0] * cell + cell * .17, cell * .078, owners[0], .62);
+      }
     }
 
-    /* 跨中心航线：跳至 12 后可直飞 40（双向虚线 + 双箭头） */
-    [[FLY_FROM, FLY_TO], [FLY_FROM + STEP, FLY_TO + STEP]].forEach(function (ln) {
-      var a = TRACK[ln[0] % LOOP], b = TRACK[ln[1] % LOOP];
+    /* 跨中心航线：双向虚线 + 双箭头 */
+    LANES.forEach(function (ln) {
+      var a = TRACK[ln[0]], b = TRACK[ln[1]];
       var x1 = self.cx(a[1]), y1 = self.cy(a[0]), x2 = self.cx(b[1]), y2 = self.cy(b[0]);
       v.line(x1 + (x2 - x1) * .20, y1 + (y2 - y1) * .20, x1 + (x2 - x1) * .80, y1 + (y2 - y1) * .80,
         { color: P.ink3, w: 1, a: .5, dash: [6, 4] });
@@ -564,8 +582,9 @@
         { color: P.ink3, w: 1, a: .5, head: Math.max(5, cell * .18) });
     });
 
-    /* 中心：画当前骰子 */
-    this._drawDie(v, this.cx(HUB[1]), this.cy(HUB[0]), cell * 1.5, this.dice);
+    /* 中心：终点徽记 + 当前骰子 */
+    v.circle(this.cx(HUB[1]), this.cy(HUB[0]), cell * .84, { stroke: P.ink, w: 1.5 });
+    this._drawDie(v, this.cx(HUB[1]), this.cy(HUB[0]), cell * 1.28, this.dice);
 
     /* 上一手轨迹：含跳/飞的中继点 */
     if (this.lastMove && this.lastMove.from >= 0) {
@@ -625,7 +644,10 @@
     }
   };
 
-  /** 四种纯黑白可辨识的座徽；alpha 用于淡化同色格角标 */
+  /* 环道余数 → 视该格为同色格的座位（由 START_IDX 推得：余 0→红蓝，余 2→黄绿） */
+  var TICK_OF = { 0: [0, 2], 2: [1, 3] };
+
+  /* 四种纯黑白可辨识的座徽；alpha 用于淡化同色格角标 */
   Flight.prototype._seatMark = function (v, x, y, r, seat, alpha) {
     var style = seat % 4, a = alpha == null ? 1 : alpha;
     if (style === 0) v.circle(x, y, r, { fill: P.ink, stroke: P.ink, w: 1, a: a, fillA: a });
@@ -739,10 +761,20 @@
         key: 'sixRule', label: '连四六归坪', def: true,
         choices: [{ v: true, label: '启用', note: '传统规则' }, { v: false, label: '关闭' }],
         note: '连续掷出四次 6 点时，己方已出动的飞机全部返回停机坪。'
+      },
+      {
+        key: 'chainJump', label: '同色连续跳', def: false,
+        choices: [{ v: false, label: '关闭', note: '跳→飞后停止' }, { v: true, label: '启用', note: '飞后同色可再跳' }],
+        note: '村规：飞越航线后若仍落在同色格，可再向前跳 4 格。'
+      },
+      {
+        key: 'capAgain', label: '撞击追加掷', def: false,
+        choices: [{ v: false, label: '关闭' }, { v: true, label: '启用', note: '击落敌机后再掷一次' }],
+        note: '村规：本手击落了敌机，可追加掷骰一次。'
       }
     ],
     rules: {
-      intro: '四人各持四架飞机，停在四个角落的停机坪上。<b>红方先行</b>，顺时针轮流掷骰。目标是<b>最先让四架飞机全部抵达自己那一端的中心终点</b>。',
+      intro: '四人各持四架飞机，停在四个角落的停机坪上。<b>红方先行</b>，顺时针轮流掷骰。起飞点就在本机库旁，绕外环一周后从本臂端口转入归航跑道，<b>最先让四架飞机全部抵达中心终点</b>者胜。',
       sections: [
         {
           title: '掷骰与起飞', items: [
@@ -754,9 +786,10 @@
         },
         {
           title: '行进与撞击', items: [
-            '飞机沿环形跑道顺时针前进，跑满一圈后转入<b>本方归航跑道</b>，最后进入中心终点。',
+            '起飞点紧邻本机库（虚线箭头所指）。飞机沿环形跑道顺时针前进。',
+            '跑满一周后回到本臂端口外侧，转入<b>本方归航跑道</b>，自端口向内直插中心。',
             '落到<b>对方飞机所在的跑道格</b>，即把该格上所有对方飞机<b>击回停机坪</b>，须重新掷 6 点起飞。',
-            '归航跑道与终点是本方专用，<b>不会在其中被撞击</b>。',
+            '归航跑道与中心终点不受撞击。',
             '己方多架飞机可以停在同一格，不互相阻挡。'
           ]
         },
@@ -764,7 +797,7 @@
           title: '跳子与飞子', items: [
             '沿本方路径<b>每 4 格为一个同色格</b>，盘面上以本方小座徽标出（一格至多两家共享）。',
             '<b>跳</b>：走子后落在本方同色格，立即向前<b>跳 4 格</b>到下一个同色格（起飞落起点格不跳）。',
-            '<b>飞</b>：跳后若落在<b>航线起点</b>（跨中心虚线的端点），则<b>跨中心直飞</b>到对面同色格，一下推进 28 格；飞后不再跳。',
+            '<b>飞</b>：跳后若落在<b>航线起点</b>（跨中心虚线的端点），则<b>跨中心直飞</b>到对面同色格；飞后不再跳。',
             '跳与飞<b>只结算最终落点</b>：中途掠过的格子上的敌机不受影响，最终落点上的敌机照常被击落。',
             '已进入归航跑道或抵达终点后不再跳飞；跳会冲进归航段时也不跳。'
           ]
@@ -784,13 +817,21 @@
           ]
         },
         {
+          title: '村规（开局可选）', items: [
+            '<b>同色连续跳</b>：飞越航线后若仍落在同色格，可再向前跳 4 格（默认关闭）。',
+            '<b>撞击追加掷</b>：本手击落了敌机，可追加掷骰一次（默认关闭）。',
+            '<b>连四六归坪</b>：连续四次 6 点已出动飞机全部回坪（默认启用，可关）。'
+          ]
+        },
+        {
           title: '盘面记号', items: [
-            '十字盘上<b>粗框格</b>为四方起点，格内为本方座徽；<b>加粗底纹的通道</b>为各方归航跑道，末端插旗处为终点。',
-            '跑道格对角上的<b>小座徽</b>表示该格是哪两家的同色格；<b>跨中心的双向虚线箭头</b>即航线。',
+            '<b>粗框格</b>为四方起飞点，紧贴各自机库，虚线箭头由机库指向起飞点。',
+            '跑道格对角上的<b>淡色小座徽</b>表示该格是哪家的同色格；<b>跨中心的双向虚线箭头</b>即各家航线。',
+            '归航跑道自臂端口部向内延伸，内端座徽旁的箭头指向<b>中心终点</b>（四方共用）。',
             '四个虚线大框为停机坪，内含四个泊位环，飞机起飞后留下空环。',
             '正中央画出<b>当前骰子点数</b>，未掷时显示「骰」字。',
             '可动的飞机外套<b>红色虚线圈</b>；虚线箭头为上一手轨迹，其中<b>红色一段</b>表示飞越。',
-            '同格多架飞机会略微错开摆放，便于数清。'
+            '同格多架飞机会缩小平铺摆放，便于数清。'
           ]
         }
       ]
@@ -802,9 +843,9 @@
   Hub.Flight = Flight;
   Hub.FL = {
     GW: GW, LOOP: LOOP, RUNWAY_LEN: RUNWAY, FINISH: FINISH, PATHLEN: PATHLEN,
-    STEP: STEP, PLANES: PLANES, TRACK: TRACK, RUNWAYS: RUNWAYS,
+    PLANES: PLANES, TRACK: TRACK, RUNWAYS: RUNWAYS, START_IDX: START_IDX,
     HANGARS: HANGARS, HUB: HUB, CROSS: CROSS, SEAT_NAME: SEAT_NAME,
-    COLOR_STEP: COLOR_STEP, FLY_FROM: FLY_FROM, FLY_TO: FLY_TO
+    COLOR_STEP: COLOR_STEP, LANES: LANES, FLY_PATH: FLY_PATH
   };
 
 })(window);
