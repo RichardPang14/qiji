@@ -737,7 +737,7 @@
         '<div class="about-block">' +
         '<p>这是一套<b>纯前端</b>的棋类合集，无框架、无构建、不联网。双击 <code>index.html</code> 即可在浏览器中开局。</p>' +
         '<p><b>已完成：</b>' + done + '</p>' +
-        (todo ? ('<p><b>待补完：</b>' + todo + '</p>') : '<p><b>七戏齐备。</b></p>') +
+        (todo ? ('<p><b>待补完：</b>' + todo + '</p>') : ('<p><b>棋戏齐备，共 ' + Hub.list().length + ' 种。</b></p>')) +
         '<p><b>操作：</b>鼠标点选棋子、再点目标位落子；<code>Ctrl+Z</code> 悔棋，<code>Ctrl+R</code> 重开，<code>Esc</code> 关闭弹层。</p>' +
         '<p><b>快捷键之外的按钮：</b>「提示」会请电脑给出一着建议并在盘上标出；「认输」立即结束当前对局。</p>' +
         '<p style="color:var(--ink-3);font-size:12px">电脑强度分入门 / 进阶 / 高手三档，均基于 alpha-beta 搜索或蒙特卡洛模拟，在浏览器内实时计算。</p>' +
