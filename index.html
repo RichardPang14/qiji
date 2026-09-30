@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>棋集 · 七戏</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ══════════════ 大厅 ══════════════ -->
+  <section id="screen-lobby" class="screen">
+    <header class="masthead">
+      <div class="mast-mark"><canvas id="brand-canvas"></canvas></div>
+      <div class="mast-text">
+        <h1>棋集</h1>
+        <p>七种棋戏 · 同屏对弈 · 内置电脑</p>
+      </div>
+      <nav class="mast-nav">
+        <button class="btn btn-ghost" data-act="about">关于</button>
+      </nav>
+    </header>
+
+    <div class="section-label"><span>已成之戏</span><hr></div>
+    <div id="game-grid" class="game-grid"></div>
+
+    <div class="section-label"><span>陆续补完</span><hr></div>
+    <div id="upcoming-grid" class="game-grid upcoming"></div>
+
+    <footer class="colophon">
+      <span>纯前端实现 · 无需联网 · 双击 index.html 即可开局</span>
+    </footer>
+  </section>
+
+  <!-- ══════════════ 对局 ══════════════ -->
+  <section id="screen-table" class="screen hidden">
+    <header class="table-bar">
+      <button class="btn btn-ghost" data-act="lobby">← 大厅</button>
+      <div class="table-title">
+        <h2 id="table-name">—</h2>
+        <p id="table-sub">—</p>
+      </div>
+      <div class="table-tools">
+        <button class="btn btn-ghost" data-act="rules">规则</button>
+        <button class="btn btn-ghost" data-act="restart">重开</button>
+      </div>
+    </header>
+
+    <main class="table-main">
+      <div class="board-wrap" id="board-wrap">
+        <canvas id="board"></canvas>
+        <div id="board-overlay" class="board-overlay hidden"></div>
+      </div>
+
+      <aside class="side">
+        <div class="panel">
+          <div class="panel-h">对局</div>
+          <div id="seat-list" class="seat-list"></div>
+          <div id="status-line" class="status-line">—</div>
+          <div id="hint-line" class="hint-line"></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-h">操作</div>
+          <div id="action-row" class="action-row"></div>
+          <div id="extra-row" class="action-row"></div>
+        </div>
+
+        <div class="panel" id="panel-log">
+          <div class="panel-h">记录</div>
+          <div id="log-body" class="log-body"></div>
+        </div>
+
+        <div class="panel" id="panel-extra">
+          <div class="panel-h">信息</div>
+          <div id="extra-body" class="extra-body"></div>
+        </div>
+      </aside>
+    </main>
+  </section>
+
+</div>
+
+<!-- ══════════════ 弹层 ══════════════ -->
+<div id="modal" class="modal hidden">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h3 id="modal-title">标题</h3>
+      <button class="modal-x" data-act="close-modal">×</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-foot" id="modal-foot"></div>
+  </div>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<!-- 核心 -->
+<script src="js/core/hub.js"></script>
+<script src="js/core/view.js"></script>
+<script src="js/core/search.js"></script>
+
+<!-- 棋种 -->
+<script src="js/games/gomoku.js"></script>
+<script src="js/games/xiangqi.js"></script>
+<script src="js/games/xiangqi-ai.js"></script>
+<script src="js/games/go.js"></script>
+<script src="js/games/go-ai.js"></script>
+<script src="js/games/jungle.js"></script>
+<script src="js/games/jungle-ai.js"></script>
+<script src="js/games/checkers.js"></script>
+<script src="js/games/checkers-ai.js"></script>
+<script src="js/games/flight.js"></script>
+<script src="js/games/flight-ai.js"></script>
+<script src="js/games/monopoly.js"></script>
+<script src="js/games/monopoly-ai.js"></script>
+
+<!-- 界面（最后加载） -->
+<script src="js/core/ui.js"></script>
+</body>
+</html>
