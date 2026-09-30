@@ -419,9 +419,21 @@
       rad = Math.sqrt(rad) + this.s * .62;
       v.circle(cx, cy, rad, { fill: P.ink, fillA: .035 });
       v.circle(cx, cy, rad, { stroke: P.ink3, w: 1, dash: [4, 4], a: .75 });
-      v.text(String(s + 1), cx, cy - rad - this.s * .30, {
+      /* 座号标签：夹进画布内，避免北/南角被裁掉 */
+      var ly = cy - rad - this.s * .30;
+      ly = Hub.util.clamp(ly, this.s * .34, this.H - this.s * .34);
+      v.text(String(s + 1), cx, ly, {
         size: Math.max(8, this.s * .30), color: P.ink3, family: 'monospace'
       });
+      /* 进度弧：已入子数占满圈的比例，不遮挡任何棋子 */
+      var done = this.countHome(s);
+      if (done > 0) {
+        v.arc(cx, cy, rad + this.s * .12, -Math.PI / 2,
+          -Math.PI / 2 + Math.PI * 2 * done / PIECES, { color: P.ink, w: 2.2, a: .85 });
+      }
+      if (done >= PIECES) {
+        v.text('✓', cx, cy, { size: Math.max(10, this.s * .6), color: P.ink, weight: 700 });
+      }
     }
 
     /* 空位小点 */

@@ -438,19 +438,24 @@
 
   /* ───────── 绘制 ───────── */
   Flight.prototype.draw = function (v) {
-    var cell = this.cell, i, s, k;
+    var cell = this.cell, i, s, k, self = this;
 
-    /* 停机坪：四个角落 */
+    /* 停机坪：四个角落，内含四个泊位环 */
     for (s = 0; s < 4; s++) {
       var hr = HANGARS[s][0][0], hc = HANGARS[s][0][1];
       var x = this.ox + (hc - 2 + .12) * cell, y = this.oy + (hr - 2 + .12) * cell;
       v.rect(x, y, cell * 3.76, cell * 3.76, {
-        stroke: P.ink, w: 1.2, a: .55, r: cell * .3, dash: [5, 4]
+        fill: P.wash, stroke: P.ink, w: 1.2, a: .55, r: cell * .3, dash: [5, 4]
       });
       v.text(this.seatName(s) + '停机坪', x + cell * 1.88, y + cell * .42, {
         size: Math.max(7, cell * .30), color: P.ink3, alpha: .85,
         family: '"Kaiti SC","STKaiti","KaiTi",serif'
       });
+      for (k = 0; k < 4; k++) {
+        var bh = HANGARS[s][k];
+        v.circle(this.cx(bh[1]), this.cy(bh[0]), cell * .36,
+          { stroke: P.ruleSoft, w: 1, dash: [3, 3], a: .8 });
+      }
     }
 
     /* 十字盘底色 */
@@ -471,27 +476,42 @@
             { color: P.ruleSoft, w: .6, a: .3 });
         }
       }
-      /* 终点格 */
+      /* 跑道内的导向箭头 */
+      for (k = 0; k < RUNWAYS[s].length - 1; k++) {
+        var ra = RUNWAYS[s][k], rb = RUNWAYS[s][k + 1];
+        v.arrow(this.cx(ra[1]), this.cy(ra[0]), this.cx(rb[1]), this.cy(rb[0]),
+          { color: P.ink3, w: .9, a: .5, head: Math.max(4, cell * .15) });
+      }
+      /* 终点格：插旗 */
       var fc = RUNWAYS[s][RUNWAYS[s].length - 1];
-      v.rect(this.ox + fc[1] * cell + cell * .12, this.oy + fc[0] * cell + cell * .12,
-        cell * .76, cell * .76, { stroke: P.ink, w: 1.3, r: cell * .12 });
-      v.text(String(s + 1), this.cx(fc[1]), this.cy(fc[0]), {
-        size: cell * .42, color: P.ink3, family: 'monospace'
+      var fx = this.cx(fc[1]), fy = this.cy(fc[0]);
+      v.line(fx - cell * .16, fy + cell * .30, fx - cell * .16, fy - cell * .30, { color: P.ink, w: 1.4 });
+      v.polygon([
+        [fx - cell * .16, fy - cell * .30], [fx + cell * .28, fy - cell * .16], [fx - cell * .16, fy - cell * .02]
+      ], { fill: P.ink });
+      v.text(String(s + 1), fx + cell * .14, fy + cell * .22, {
+        size: cell * .30, family: 'monospace', weight: 700, color: P.ink2
       });
     }
 
-    /* 跑道格线 */
+    /* 环形跑道：整格铺底成连续带 */
     for (i = 0; i < TRACK.length; i++) {
       var t = TRACK[i];
-      var isStart = (i % STEP === 0);
-      v.rect(this.ox + t[1] * cell + cell * .07, this.oy + t[0] * cell + cell * .07,
-        cell * .86, cell * .86,
-        { stroke: isStart ? P.ink : P.ruleSoft, w: isStart ? 1.4 : .8, a: isStart ? .9 : .6 });
-      if (isStart) {
-        v.text(String(((i / STEP) | 0) + 1), this.cx(t[1]), this.cy(t[0]), {
-          size: cell * .34, color: P.ink3, family: 'monospace', alpha: .8
-        });
-      }
+      v.rect(this.ox + t[1] * cell, this.oy + t[0] * cell, cell, cell,
+        { fill: P.wash, stroke: P.ruleFaint, w: .7 });
+    }
+    /* 行进方向箭头（顺时针） */
+    [7, 21, 35, 49].forEach(function (i2) {
+      var a = TRACK[i2], b = TRACK[(i2 + 1) % LOOP];
+      v.arrow(self.cx(a[1]), self.cy(a[0]), self.cx(b[1]), self.cy(b[0]),
+        { color: P.ink3, w: 1.1, a: .75, head: Math.max(5, cell * .20) });
+    });
+    /* 四方起点：粗框 + 座徽 */
+    for (s = 0; s < 4; s++) {
+      var stc = TRACK[STEP * s];
+      v.rect(this.ox + stc[1] * cell + cell * .06, this.oy + stc[0] * cell + cell * .06,
+        cell * .88, cell * .88, { stroke: P.ink, w: 1.6 });
+      this._seatMark(v, this.cx(stc[1]), this.cy(stc[0]), cell * .21, s);
     }
 
     /* 中心：画当前骰子 */
@@ -507,9 +527,19 @@
       }
     }
 
-    /* 飞机 */
+    /* 飞机：同格多机时缩小平铺 2×2，避免糊成一团 */
+    var cnt = {}, s2, k2;
+    for (s2 = 0; s2 < 4; s2++) {
+      for (k2 = 0; k2 < PLANES; k2++) {
+        if (this.pos[s2][k2] === -2) continue;
+        var cl2 = this.planeCell(s2, k2);
+        if (!cl2) continue;
+        var ky = cl2[0] + ',' + cl2[1];
+        cnt[ky] = (cnt[ky] || 0) + 1;
+      }
+    }
     for (s = 0; s < 4; s++) {
-      var at = {};                                    // 同格多机时错开绘制
+      var at = {};
       for (k = 0; k < PLANES; k++) {
         if (this.pos[s][k] === -2) continue;          // 已退场
         var cl = this.planeCell(s, k);
@@ -517,11 +547,14 @@
         var key = cl[0] + ',' + cl[1];
         var n = at[key] = (at[key] || 0);
         at[key]++;
-        var ox = (n % 2) * cell * .17 - cell * .085;
-        var oy = ((n / 2) | 0) * cell * .17 - cell * .085;
+        var c = cnt[key] || 1;
+        var pr = c > 1 ? cell * .25 : cell * .36;
+        var sp = c > 1 ? cell * .40 : 0;
+        var ox = ((n % 2) - .5) * sp;
+        var oy = ((((n / 2) | 0) - .5) * sp);
         var movable = (s === this.turn && !this._over && this.phase === 'move' &&
           this.movable.indexOf(k) >= 0);
-        this._drawPlane(v, this.cx(cl[1]) + ox, this.cy(cl[0]) + oy, s, k, movable, cell);
+        this._drawPlane(v, this.cx(cl[1]) + ox, this.cy(cl[0]) + oy, s, k, movable, pr);
       }
     }
 
@@ -536,19 +569,53 @@
     }
   };
 
-  /** 四种纯黑白可辨识样式 + 座号 */
-  Flight.prototype._drawPlane = function (v, x, y, seat, p, hot, cell) {
-    var R = cell * .34, style = seat % 4;
-    var filled = (style === 0 || style === 2);
-    if (hot) v.circle(x, y, R * 1.45, { stroke: P.warn, w: 1.6, a: .9, dash: [3, 3] });
-    v.circle(x, y, R, {
-      fill: style === 2 ? P.ink3 : (filled ? P.ink : P.paper),
-      stroke: P.ink, w: 1.2
-    });
-    if (style === 3) v.circle(x, y, R * .5, { fill: P.ink });
-    v.text(String(seat + 1), x, y, {
-      size: R * .95, family: 'monospace', weight: 600,
-      color: (style === 3) ? '#fff' : (filled ? '#fff' : P.ink)
+  /** 四种纯黑白可辨识的座徽 */
+  Flight.prototype._seatMark = function (v, x, y, r, seat) {
+    var style = seat % 4;
+    if (style === 0) v.circle(x, y, r, { fill: P.ink, stroke: P.ink, w: 1 });
+    else if (style === 1) v.circle(x, y, r, { fill: P.paper, stroke: P.ink, w: 1.4 });
+    else if (style === 2) v.circle(x, y, r, { fill: P.ink3, stroke: P.ink, w: 1 });
+    else {
+      v.circle(x, y, r, { fill: P.paper, stroke: P.ink, w: 1.4 });
+      v.circle(x, y, r * .45, { fill: P.ink });
+    }
+  };
+
+  /** 线稿小飞机（顶视）：后掠主翼 + 尾翼 + 机身 + 座号牌，r 为机身半径 */
+  Flight.prototype._drawPlane = function (v, x, y, seat, p, hot, r) {
+    var style = seat % 4;
+    var fill = style === 2 ? P.ink3 : (style === 0 ? P.ink : P.paper);
+    var dark = (style === 0 || style === 2);
+    if (hot) v.circle(x, y, r * 1.40, { stroke: P.warn, w: 1.6, a: .9, dash: [3, 3] });
+    var wing = { fill: fill, stroke: P.ink, w: 1 };
+    /* 主翼：左右两片后掠翼 */
+    v.polygon([
+      [x - r * .20, y - r * .16], [x - r * 1.00, y + r * .30],
+      [x - r * 1.00, y + r * .46], [x - r * .20, y + r * .18]
+    ], wing);
+    v.polygon([
+      [x + r * .20, y - r * .16], [x + r * 1.00, y + r * .30],
+      [x + r * 1.00, y + r * .46], [x + r * .20, y + r * .18]
+    ], wing);
+    /* 尾翼 */
+    v.polygon([
+      [x - r * .12, y + r * .60], [x - r * .54, y + r * .92],
+      [x - r * .54, y + r * 1.02], [x - r * .12, y + r * .82]
+    ], wing);
+    v.polygon([
+      [x + r * .12, y + r * .60], [x + r * .54, y + r * .92],
+      [x + r * .54, y + r * 1.02], [x + r * .12, y + r * .82]
+    ], wing);
+    /* 机身 */
+    v.polygon([
+      [x, y - r * 1.05], [x + r * .20, y - r * .45], [x + r * .20, y + r * .55],
+      [x, y + r * .90], [x - r * .20, y + r * .55], [x - r * .20, y - r * .45]
+    ], { fill: fill, stroke: P.ink, w: 1.2 });
+    if (style === 3) v.circle(x, y - r * .10, r * .56, { stroke: P.ink, w: .9 });
+    /* 座号牌 */
+    v.circle(x, y - r * .10, r * .40, { fill: dark ? P.paper : P.ink, stroke: P.ink, w: .9 });
+    v.text(String(seat + 1), x, y - r * .08, {
+      size: r * .62, family: 'monospace', weight: 700, color: dark ? P.ink : '#fff'
     });
   };
 

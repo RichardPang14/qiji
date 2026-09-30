@@ -1139,15 +1139,25 @@
     if (!n) return;
     var k, p, s;
     if (n >= 5) {
-      p = bf.pt(.12); s = cell * .16;
-      v.rect(p[0] - s / 2, p[1] - s / 2, s, s, { fill: P.ink, stroke: P.ink, w: 1 });
-      v.cross(p[0], p[1], s * .58, { color: '#fff', w: 1 });
+      /* 酒店：高楼 + 顶旗 + 两层窗线 */
+      p = bf.pt(.10); s = cell * .16;
+      v.rect(p[0] - s / 2, p[1] - s * .58, s, s * 1.16, { fill: P.ink, stroke: P.ink, w: 1 });
+      v.line(p[0], p[1] - s * .58, p[0], p[1] - s * 1.02, { color: P.ink, w: 1 });
+      v.polygon([
+        [p[0], p[1] - s * 1.02], [p[0] + s * .52, p[1] - s * .88], [p[0], p[1] - s * .74]
+      ], { fill: P.ink });
+      v.line(p[0] - s * .28, p[1] - s * .18, p[0] + s * .28, p[1] - s * .18, { color: '#fff', w: .9 });
+      v.line(p[0] - s * .28, p[1] + s * .20, p[0] + s * .28, p[1] + s * .20, { color: '#fff', w: .9 });
       return;
     }
-    s = Math.min(cell * .105, cell * .50 / n);
+    /* 小房：方身 + 三角顶 */
+    s = Math.min(cell * .115, cell * .50 / n);
     for (k = 0; k < n; k++) {
       p = bf.pt(-.14 + (k + .5) * (.52 / n));
-      v.rect(p[0] - s / 2, p[1] - s / 2, s, s, { fill: P.ink, stroke: P.ink, w: .8 });
+      v.rect(p[0] - s * .42, p[1] - s * .08, s * .84, s * .60, { fill: P.ink, stroke: P.ink, w: .8 });
+      v.polygon([
+        [p[0] - s * .54, p[1] - s * .08], [p[0], p[1] - s * .62], [p[0] + s * .54, p[1] - s * .08]
+      ], { fill: P.ink });
     }
   };
 
@@ -1238,10 +1248,12 @@
       this._drawKindMark(v, at(dy !== 0 ? .36 : .38, 0), cell, c, dy !== 0 ? .12 : .11);
     }
 
-    /* 产权外框：四种线型对应四家 */
+    /* 产权外框：四种线型对应四家；外角再补一枚座徽 */
     if (o >= 0) {
       v.rect(x + 1.5, y + 1.5, cell - 3, cell - 3,
         { stroke: P.ink, w: 1.9, dash: DASH[o % 4], a: .92 });
+      var oc = at(-.36, -.36);
+      this._glyph(v, oc[0], oc[1], cell * .085, o, null);
     }
     /* 待购高亮 */
     if (i === this.offer && this.phase === 'buy') {
@@ -1285,8 +1297,11 @@
       v.circle(x, y, r * .95, { stroke: P.ink, w: 1.2 });
       v.text('?', x, y + r * .06, { size: Math.max(6, r * 1.25), family: 'monospace', weight: 700 });
     } else if (c.k === 'chest') {
-      v.rect(x - r, y - r * .68, r * 2, r * 1.36, { stroke: P.ink, w: 1.2 });
-      v.polyline([[x - r, y - r * .68], [x, y + r * .1], [x + r, y - r * .68]], { color: P.ink3, w: 1 });
+      /* 命运：两张叠放的牌 */
+      v.rect(x - r * .80, y - r * .58, r * 1.42, r * 1.06, { fill: P.paper, stroke: P.ink3, w: 1 });
+      v.rect(x - r * .62, y - r * .78, r * 1.42, r * 1.06, { fill: P.paper, stroke: P.ink, w: 1.2 });
+      v.polyline([[x - r * .62, y - r * .78], [x + r * .09, y - r * .20], [x + r * .80, y - r * .78]],
+        { color: P.ink3, w: 1 });
     } else if (c.k === 'tax') {
       v.text('¥', x, y, { size: Math.max(6, r * 1.5), family: 'monospace', weight: 700, color: P.ink2 });
     }
@@ -1383,6 +1398,7 @@
     }
 
     /* 各家账目 */
+    var fy0 = y0 + w0 - cell * .30;
     var ty = ny + bh + cell * .34;
     var aCash = x0 + w0 - cell * 4.55, aProp = x0 + w0 - cell * 2.55, aNet = x0 + w0 - cell * .45;
     var hs = Math.max(5, cell * .145);
@@ -1425,8 +1441,29 @@
       }
     }
 
+    /* 组别图例：色带深浅 ↔ 甲…辛，紧跟账目表下方 */
+    var rowEnd = ty + cell * .13 + this.players * cell * .48;
+    var ly = Math.min(fy0 - cell * .40, rowEnd + cell * .30);
+    var lw = (w0 - cell * 1.0) / 8, k3;
+    v.text('组', x0 + cell * .30, ly + cell * .12, {
+      size: Math.max(5, cell * .15), color: P.ink4, family: KAI
+    });
+    for (k3 = 0; k3 < 8; k3++) {
+      var lx = x0 + cell * .55 + k3 * lw, st3 = GSTYLE[k3];
+      v.rect(lx, ly, lw * .46, cell * .24, {
+        fill: P.ink, fillA: st3.a, stroke: P.ink, w: .7, a: .6
+      });
+      if (st3.h) {
+        v.hatch(lx, ly, lw * .46, cell * .24, Math.max(3, cell * .07),
+          { color: st3.a >= .5 ? P.paper : P.ink, w: .6, a: st3.a >= .5 ? .30 : .45 });
+      }
+      v.text(GROUP_NAME[k3], lx + lw * .66, ly + cell * .12, {
+        size: Math.max(5, cell * .15), family: KAI, color: P.ink2
+      });
+    }
+
     /* 回合与上限 */
-    var fy = y0 + w0 - cell * .30;
+    var fy = fy0;
     v.text('第 ' + this.round + ' / ' + this.maxRound + ' 回合' +
       (this.phase === 'over' ? '　·　已终局' : ''), mx, fy, {
       size: Math.max(5, cell * .16), color: P.ink4, family: KAI
