@@ -11,12 +11,6 @@
   function $(s, r) { return (r || document).querySelector(s); }
   function $$(s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); }
 
-  /* 尚未实现的棋种，先在大厅占位；id 与正式注册名一致，一旦实现会自动从这里消失 */
-  var UPCOMING = [
-    { id: 'flight', name: '飞行棋', en: 'FLIGHT CHESS', sub: '掷骰绕行，同色跳飞，撞落对手回到起点。' },
-    { id: 'monopoly', name: '大富翁', en: 'MONOPOLY', sub: '购地建房，机会命运，让对手破产收场。' }
-  ];
-
   var App = Hub.App = {
     view: null,
     canvas: null,
@@ -79,19 +73,6 @@
     var grid = $('#game-grid');
     grid.innerHTML = '';
     Hub.list().forEach(function (meta) { grid.appendChild(App.card(meta)); });
-
-    var up = $('#upcoming-grid');
-    up.innerHTML = '';
-    /* 已正式注册的棋种不再当作「待补」重复展示 */
-    UPCOMING.forEach(function (m) {
-      if (Hub.get(m.id)) return;
-      up.appendChild(App.cardOff(m));
-    });
-    /* 全部补齐后隐去整个分区 */
-    var label = up.previousElementSibling;
-    if (label && label.classList.contains('section-label')) {
-      label.classList.toggle('hidden', up.children.length === 0);
-    }
   };
 
   /* 座位数：部分棋种（如跳棋）人数可在开局选项里调 */
@@ -120,18 +101,6 @@
     c.appendChild(body);
 
     c.addEventListener('click', function () { App.openSetup(meta); });
-    return c;
-  };
-
-  App.cardOff = function (m) {
-    var c = U.el('div', 'card off');
-    c.innerHTML =
-      '<canvas class="card-ico"></canvas>' +
-      '<div class="card-soon">待补</div>' +
-      '<div class="card-body">' +
-        '<div class="card-name">' + U.esc(m.name) + '<em>' + U.esc(m.en) + '</em></div>' +
-        '<div class="card-sub">' + U.esc(m.sub) + '</div>' +
-      '</div>';
     return c;
   };
 
@@ -728,16 +697,13 @@
 
   App.showAbout = function () {
     var done = Hub.list().map(function (m) { return m.name; }).join(' · ');
-    /* 已正式注册的不再算「待补」，七戏齐备时该行自动消失 */
-    var todo = UPCOMING.filter(function (m) { return !Hub.get(m.id); })
-      .map(function (m) { return m.name; }).join(' · ');
     App.modal({
       title: '关于棋集',
       body:
         '<div class="about-block">' +
         '<p>这是一套<b>纯前端</b>的棋类合集，无框架、无构建、不联网。双击 <code>index.html</code> 即可在浏览器中开局。</p>' +
         '<p><b>已完成：</b>' + done + '</p>' +
-        (todo ? ('<p><b>待补完：</b>' + todo + '</p>') : ('<p><b>棋戏齐备，共 ' + Hub.list().length + ' 种。</b></p>')) +
+        '<p><b>棋戏齐备，共 ' + Hub.list().length + ' 种。</b></p>' +
         '<p><b>操作：</b>鼠标点选棋子、再点目标位落子；<code>Ctrl+Z</code> 悔棋，<code>Ctrl+R</code> 重开，<code>Esc</code> 关闭弹层。</p>' +
         '<p><b>快捷键之外的按钮：</b>「提示」会请电脑给出一着建议并在盘上标出；「认输」立即结束当前对局。</p>' +
         '<p style="color:var(--ink-3);font-size:12px">电脑强度分入门 / 进阶 / 高手三档，均基于 alpha-beta 搜索或蒙特卡洛模拟，在浏览器内实时计算。</p>' +

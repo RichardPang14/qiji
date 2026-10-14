@@ -89,7 +89,6 @@ button{font-family:inherit;font-size:inherit;color:inherit;background:none;borde
   gap:14px;
   margin-bottom:34px;
 }
-.game-grid.upcoming{grid-template-columns:repeat(auto-fill,minmax(180px,1fr))}
 
 .card{
   border:1px solid var(--line);
@@ -121,14 +120,6 @@ button{font-family:inherit;font-size:inherit;color:inherit;background:none;borde
 .tag{
   font-size:10px;letter-spacing:.06em;color:var(--ink-2);
   border:1px solid var(--line);border-radius:999px;padding:1px 8px;
-}
-.card.off{cursor:default;opacity:.62}
-.card.off:hover{border-color:var(--line);transform:none}
-.card.off .card-ico{background:repeating-linear-gradient(45deg,var(--paper-2),var(--paper-2) 6px,var(--paper-3) 6px,var(--paper-3) 12px)}
-.card-soon{
-  position:absolute;top:8px;right:-26px;transform:rotate(38deg);
-  background:var(--ink);color:var(--paper);font-size:9px;letter-spacing:.14em;
-  padding:2px 30px;
 }
 
 .colophon{
