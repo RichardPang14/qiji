@@ -53,7 +53,7 @@
   Hub.list = function () { return Hub.order.map(function (id) { return Hub.games[id]; }); };
 
   /* ─────────── 通用工具 ─────────── */
-  var U = Hub.util = {
+  Hub.util = {
     clamp: function (v, a, b) { return v < a ? a : (v > b ? b : v); },
 
     /* 二维数组深拷贝（元素为原始值） */

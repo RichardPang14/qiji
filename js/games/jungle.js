@@ -100,7 +100,6 @@
   /* ───────── 基础 ───────── */
   Jungle.prototype.side = function (p) { return p > 0 ? 0 : 1; };
   Jungle.prototype.typeOf = function (p) { return p < 0 ? -p : p; };
-  Jungle.prototype.rc = function (i) { return [(i / COLS) | 0, i % COLS]; };
 
   /* 站在对方陷阱里的子战力归零 */
   Jungle.prototype.effRank = function (i) {
@@ -114,7 +113,6 @@
   /* 陷阱归属：上方三个属蓝方（座位 1），下方三个属红方（座位 0），非陷阱返回 -1 */
   Jungle.prototype.trapSide = function (i) { return TRAP[i]; };
   Jungle.prototype.denSide = function (i) { return DEN[i]; };
-  Jungle.prototype.isWater = function (i) { return WATER[i] === 1; };
 
   /* ───────── 吃子判定 ───────── */
   Jungle.prototype.canCapture = function (fi, ti) {
@@ -333,7 +331,7 @@
     return h;
   };
   Jungle.prototype._rankLine = function () {
-    var self = this, arr = [];
+    var arr = [];
     for (var t = 1; t <= 8; t++) arr.push({ t: t, r: this.rank[t] });
     arr.sort(function (a, b) { return b.r - a.r; });
     return arr.map(function (e) { return ANIMAL[e.t]; }).join('＞') + '（鼠可吃象）';

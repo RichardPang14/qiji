@@ -49,7 +49,6 @@
   };
 
   Reversi.prototype.seatCount = function () { return 2; };
-  Reversi.prototype.colorOf = function (seat) { return seat + 1; };
 
   /** 落在 i 处可翻的棋子列表；不可落返回 null */
   Reversi.prototype.flipsAt = function (i, seat) {

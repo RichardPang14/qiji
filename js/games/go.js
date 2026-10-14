@@ -108,11 +108,6 @@
     return { stones: stones, libs: libs };
   };
 
-  Go.prototype.liberties = function (i) {
-    if (!this.b[i]) return 0;
-    return this.groupInfo(i).libs.length;
-  };
-
   /**
    * 试下一子：合法则改盘并返回被提子数组；非法返回 null 且盘面不变。
    * superko=true 时启用情景超级劫（正式对局用），false 时只做禁自杀（模拟用）。
@@ -316,15 +311,6 @@
     return { terr: terr, eff: eff };
   };
 
-  /** 该点当前是否可下（含禁自杀与劫争） */
-  Go.prototype.isLegal = function (i, color) {
-    if (i < 0 || i >= this.n || this.b[i] !== 0) return false;
-    var cap = this.tryPlay(i, color, true);
-    if (cap === null) return false;
-    this.revertPlay(i, color, cap);
-    return true;
-  };
-
   /** 标记 / 取消标记一整块为死子；返回标记后的状态 */
   Go.prototype.toggleDead = function (i) {
     if (i < 0 || !this.b[i]) return false;
@@ -353,17 +339,6 @@
       deadB: deadB, deadW: deadW,
       black: black, white: white, diff: diff,
       terr: terr, eff: eff
-    };
-  };
-
-  /** 数子结果（两种命名都给，便于外部调用） */
-  Go.prototype.tally = function () {
-    var s = this.computeScore();
-    return {
-      blackStone: s.stonesB, blackTerr: s.terrB,
-      whiteStone: s.stonesW, whiteTerr: s.terrW,
-      dame: s.dame, deadB: s.deadB, deadW: s.deadW,
-      black: s.black, white: s.white, diff: s.diff
     };
   };
 

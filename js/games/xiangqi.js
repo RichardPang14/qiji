@@ -67,9 +67,6 @@
   /* ───────── 工具 ───────── */
   Xiangqi.prototype.side = function (p) { return p > 0 ? RED : BLK; };
   Xiangqi.prototype.type = function (p) { return p < 0 ? -p : p; };
-  Xiangqi.prototype.at = function (r, c) {
-    return (r < 0 || r > 9 || c < 0 || c > 8) ? null : this.b[r * 9 + c];
-  };
   Xiangqi.prototype.inPalace = function (r, c, side) {
     if (c < 3 || c > 5) return false;
     return side === RED ? (r >= 7 && r <= 9) : (r >= 0 && r <= 2);
