@@ -93,24 +93,6 @@
     }
   })();
 
-  /* 格 → 类型索引，便于 O(1) 查询 */
-  var CELLKIND = {};                                 // "r,c" -> {kind, seat, idx}
-  (function () {
-    var i;
-    for (i = 0; i < TRACK.length; i++) CELLKIND[TRACK[i][0] + ',' + TRACK[i][1]] = { k: 'track', i: i };
-    for (var s = 0; s < 4; s++) {
-      for (i = 0; i < RUNWAYS[s].length; i++) {
-        CELLKIND[RUNWAYS[s][i][0] + ',' + RUNWAYS[s][i][1]] = { k: 'run', s: s, i: i };
-      }
-    }
-    CELLKIND[HUB[0] + ',' + HUB[1]] = { k: 'hub' };
-    for (s = 0; s < 4; s++) {
-      for (i = 0; i < 4; i++) {
-        CELLKIND[HANGARS[s][i][0] + ',' + HANGARS[s][i][1]] = { k: 'yard', s: s, i: i };
-      }
-    }
-  })();
-
   /* ─────────────────────────────────────────────── */
   function Flight(cfg) {
     Hub.Base.call(this, cfg);
